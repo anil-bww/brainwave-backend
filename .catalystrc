@@ -1,0 +1,36 @@
+{
+  "defaults": {
+    "project": 1,
+    "env": 1
+  },
+  "actives": {
+    "project": 1,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "48856000000053005",
+      "name": "BrainWaveWorldInc",
+      "domain": {
+        "id": "10115011285",
+        "name": "brainwaveworldinc-903676930.development"
+      },
+      "timezone": "America/Toronto",
+      "env": [
+        {
+          "idx": 1,
+          "id": "903676930",
+          "name": "Development",
+          "type": 3
+        },
+        {
+          "idx": 2,
+          "id": "10115383664",
+          "name": "Production",
+          "type": 1
+        }
+      ]
+    }
+  ]
+}
