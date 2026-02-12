@@ -1,9 +1,14 @@
 {
+  "project": {
+    "name": "BrainWaveWorldInc",
+    "id": "48856000000053005",
+    "environment": "development"
+  },
   "functions": {
+    "source": "functions",
     "targets": [
       "api"
     ],
-    "ignore": [],
-    "source": "functions"
+    "ignore": []
   }
 }
