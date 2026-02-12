@@ -23,7 +23,7 @@ async function createOrGetProfile(app, currentUser, body) {
   if (existing) {
     return {
       statusCode: 200,
-      payload: { status: 'success', action: 'exists', record: existing }
+      payload: { status: 'success', action: 'exists', record: existing}
     };
   }
 
@@ -36,8 +36,8 @@ async function createOrGetProfile(app, currentUser, body) {
     email_id:     currentUser.email_id || body.email_id || '',
     first_name:   body.first_name || currentUser.first_name || currentUser.display_name || '',
     last_name:    body.last_name || currentUser.last_name || '',
-    role_name:    currentUser.role_name || '',
-    role_id:      currentUser.role_id || '',
+    role_name:    currentUser.role_details.role_name || '',
+    role_id:      currentUser.role_details.role_id || '',
     user_type:    currentUser.user_type || '',
     mobile:       body.mobile || '',
     mfa_enabled:  body.mfa_enabled || 'false',
@@ -47,7 +47,7 @@ async function createOrGetProfile(app, currentUser, body) {
   const inserted = await insertProfile(app, profileData);
   return {
     statusCode: 201,
-    payload: { status: 'success', action: 'inserted', record: inserted }
+    payload: { status: 'success', action: 'inserted', record: inserted}
   };
 }
 
