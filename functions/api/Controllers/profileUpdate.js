@@ -1,4 +1,5 @@
 // profileUpdate.js
+const axios = require('axios');
 const {
   findProfileByZaaid,
   findProfileByZuid,
@@ -8,7 +9,7 @@ const {
 
 const ALLOWED_FIELDS = [
   'status','is_confirmed','email_id','first_name','last_name',
-  'role_name','role_id','user_type','mobile','mfa_enabled','otp_verified'
+  'role_name','role_id','user_type','mobile','countryCode', 'mfa_enabled','otp_verified'
 ];
 
 async function createOrGetProfile(app, currentUser, body) {
@@ -118,8 +119,86 @@ async function handleUpdateMobile(app, currentUser, body) {
   };
 }
 
+async function handleSendOtp(app, currentUser, body) {
+  const zuid = body.zuid || currentUser.zuid;
+  const mobile = body.mobile || currentUser.mobile;
+
+  if (!zuid || !mobile) throw new Error('zuid and mobile number are required');
+
+  // 1. Generate OTP
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // 2. Store in Cache (1 hour expiry for Catalyst)
+  const segment = app.cache().segment();
+  await segment.put(zuid, otpCode, 1);
+
+  // 3. Send via DIDIT Service
+  // Bypass if it's the test number
+  if (mobile === process.env.TEST_MOBILE_BYPASS) {
+    return { statusCode: 200, payload: { status: 'success', message: 'Test Mode: OTP generated but not sent.' } };
+  }
+
+  try {
+    await axios.post(process.env.DIDIT_BASE_URL, {
+      recipient: mobile,
+      message: `Your verification code is: ${otpCode}`,
+      // Add other Didit specific fields if required by their API
+    }, {
+      headers: { 
+        'Authorization': `Bearer ${process.env.DIDIT_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error) {
+    console.error('Didit API Error:', error.response?.data || error.message);
+    throw new Error('Failed to send SMS via Didit');
+  }
+
+  return {
+    statusCode: 200,
+    payload: { status: 'success', message: 'OTP sent to mobile' }
+  };
+}
+
+async function handleVerifyOtp(app, currentUser, body) {
+  const zuid = body.zuid || currentUser.zuid;
+  const { otp } = body;
+
+  if (!zuid || !otp) throw new Error('zuid and otp are required');
+
+  // --- BYPASS LOGIC ---
+  if (process.env.TEST_OTP_BYPASS && otp === process.env.TEST_OTP_BYPASS) {
+    return await finalizeVerification(app, zuid, "Test Bypass");
+  }
+
+  const segment = app.cache().segment();
+  const cachedOtp = await segment.get(zuid);
+
+  if (!cachedOtp || cachedOtp !== otp) {
+    const err = new Error(cachedOtp ? 'Invalid OTP' : 'OTP expired');
+    err.status = 400;
+    throw err;
+  }
+
+  await segment.delete(zuid);
+  return await finalizeVerification(app, zuid, "Mobile SMS");
+}
+
+async function finalizeVerification(app, zuid, method) {
+  const existing = await findProfileByZuid(app, zuid);
+  if (existing) {
+    await updateProfileById(app, existing.ROWID, { otp_verified: 'true' });
+  }
+  return {
+    statusCode: 200,
+    payload: { status: 'success', method: method, record: existing }
+  };
+}
+
 module.exports = {
   createOrGetProfile,
   handleProfileUpdate,
-  handleUpdateMobile
+  handleUpdateMobile,
+  handleSendOtp,
+  handleVerifyOtp,
 };
