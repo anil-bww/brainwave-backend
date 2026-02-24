@@ -8,7 +8,7 @@ async function _getInternalUserId(app, currentUser) {
   const zuid = currentUser.zuid || currentUser.id;
   const cache = app.cache().segment();
   
-  let internalId = await cache.get(`uid_${zuid}`);
+  let internalId = await cache.getValue(`uid_${zuid}`);
   
   if (!internalId) {
     const query = `SELECT ROWID FROM ${TABLE_USERS} WHERE zuid = '${zuid}' LIMIT 1`;
@@ -45,7 +45,7 @@ async function updateRecordSecure(app, tableName, ROWID, updates, currentUser) {
   
   // For the 'Users' table specifically, the ROWID must match the internalId
   if (tableName === TABLE_USERS && String(ROWID) !== String(internalId)) {
-    throw new Error('Forbidden: You can only update your own profile.');
+    throw new Error('Forbidden: You can only update your own profile.'+internalId+'-'+ROWID+','+tableName+'-'+TABLE_USERS);
   }
 
   // For other tables, we verify the user_id column
@@ -57,7 +57,7 @@ async function updateRecordSecure(app, tableName, ROWID, updates, currentUser) {
 
   return await app.datastore().table(tableName).updateRow({ ...updates, ROWID });
 }
-
+ 
 async function findRecordSecure(app, tableName, column, value, currentUser) {
   const internalId = await _getInternalUserId(app, currentUser);
   const query = `SELECT * FROM ${tableName} WHERE ${column} = '${value}' AND user_id = '${internalId}' LIMIT 1`;

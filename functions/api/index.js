@@ -1,7 +1,7 @@
 const express = require('express');
 const { verifyAuth } = require('./Controllers/auth');
 const { createOrGetProfile, handleUpdateMobile, handleSendOtp, handleVerifyOtp } = require('./Controllers/profileUpdate');
-const { handleAddLandlord, handleAddProperty, handleGenerateElavonToken } = require('./Controllers/paymentController');
+const { handleAddLandlord, handleAddProperty, handleGenerateElavonSessionToken } = require('./Controllers/paymentController');
 
 const app = express();
 app.use(express.json());
@@ -9,8 +9,7 @@ app.use(express.json());
 app.post('/profileUpdate', async (req, res) => {
   try {
     const axios = require('axios');
-    const response = await axios.get('https://api.ipify.org');
-
+    
     const { app: catalystApp, currentUser } = await verifyAuth(req, res);
     const result = await createOrGetProfile(catalystApp, currentUser, req.body);
     res.status(result.statusCode || 200).json(result.payload);
@@ -25,7 +24,7 @@ app.post('/updateMobile', async (req, res) => {
     const result = await handleUpdateMobile(catalystApp, currentUser, req.body);
     res.status(result.statusCode || 200).json(result.payload);
   } catch (err) {
-    res.status(err.status || 500).json({ status: 'error', message: err.message });
+    res.status(err.status || 500).json({ status: 'error1', message: err.message });
   }
 });
 
@@ -55,7 +54,7 @@ app.post('/verifyOtp', async (req, res) => {
 app.post('/payment/generateToken', async (req, res) => {
   try {
     const { app: catalystApp, currentUser } = await verifyAuth(req, res);
-    const result = await handleGenerateElavonToken(catalystApp, currentUser, req.body);
+    const result = await handleGenerateElavonSessionToken(catalystApp, currentUser, req.body);
     res.status(result.statusCode).json(result.payload);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });

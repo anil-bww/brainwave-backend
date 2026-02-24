@@ -32,38 +32,60 @@ async function handleAddProperty(app, currentUser, body) {
   return { statusCode: 201, payload: { status: 'success', record } };
 }
 
-async function handleGenerateElavonToken(app, currentUser, body) {
-  const { cardNumber, expiryDate, cvv, propertyId, nextBillingDate } = body;
+async function handleGenerateElavonSessionToken(app, currentUser, body) {
+  //const { amount } = body;
+  amount = 50.00;
+  if (!amount || isNaN(parseFloat(amount))) {
+    return {
+      statusCode: 400,
+      payload: { status: "error", message: "Invalid amount" }
+    };
+  }
 
-  const elavonParams = new URLSearchParams({
-    ssl_merchant_id: process.env.ELAVON_MERCHANT_ID,
-    ssl_user_id: process.env.ELAVON_USER_ID,
-    ssl_pin: process.env.ELAVON_PIN,
-    ssl_transaction_type: 'ccgettoken',
-    ssl_card_number: cardNumber,
-    ssl_exp_date: expiryDate,
-    ssl_cvv2cvc2: cvv,
-    ssl_add_token: 'Y'
+  const elavonUrl = process.env.ELAVON_ENV === "PROD"
+    ? "https://api.convergepay.com/hosted-payments/transaction_token"
+    : "https://api.demo.convergepay.com/hosted-payments/transaction_token";
+
+  const formData = new URLSearchParams({
+    ssl_merchant_id: "0022768", //process.env.ELAVON_MERCHANT_ID,
+    ssl_user_id: "apiuser",//process.env.ELAVON_USER_ID,
+    ssl_pin: "I65WWBCPV45S07VA7D8X9SA0CMT1JK12PPV9E6VPOLFUKL0QZLM3TMGUTYXGVDSL",//process.env.ELAVON_PIN,
+    ssl_transaction_type: "CCSALE",
+    ssl_amount: String(parseFloat(amount).toFixed(2))
   });
 
   try {
-    const response = await axios.post(process.env.ELAVON_API_URL, elavonParams.toString());
+    const response = await axios.post(
+      elavonUrl,
+      formData.toString(),
+      { headers: { "Content-Type": "application/json" } }
+    );
+
     const result = Object.fromEntries(new URLSearchParams(response.data));
 
-    if (result.ssl_result !== '0') throw new Error(result.ssl_result_message);
+    if (!result.ssl_txn_auth_token) {
+      throw new Error(result.errorMessage || "Token generation failed");
+    }
 
-    // Securely link token to Tenant record belonging to this user
-    const tenantRecord = await insertRecord(app, 'Tenants', {
-      property_id: propertyId,
-      elavon_token: result.ssl_token,
-      next_billing_date: nextBillingDate,
-      is_active: 'true'
-    }, currentUser);
+    return {
+      statusCode: 200,
+      payload: {
+        status: "success",
+        sessionToken: result.ssl_txn_auth_token
+      }
+    };
 
-    return { statusCode: 201, payload: { status: 'success', record: tenantRecord } };
   } catch (err) {
-    throw new Error('Elavon Tokenization failed: ' + err.message);
+    console.log("ELAVON ERROR:", err.response?.data);
+    
+    return {
+      statusCode: 500,
+      payload: {
+        status: "error",
+        message: err.response?.data || err.message
+      }
+    };
   }
 }
 
-module.exports = { handleAddLandlord, handleAddProperty, handleGenerateElavonToken };
+module.exports = { handleAddLandlord, handleAddProperty, handleGenerateElavonSessionToken };

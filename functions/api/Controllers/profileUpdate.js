@@ -44,7 +44,6 @@ async function createOrGetProfile(app, currentUser, body) {
   // Using datastore.js helper to ensure user_id is set
   const table = app.datastore().table('Users');
   const inserted = await table.insertRow(profileData);
-  
   return {
     statusCode: 201,
     payload: { status: 'success', action: 'inserted', record: inserted }
@@ -79,12 +78,28 @@ async function handleUpdateMobile(app, currentUser, body) {
 
   const updates = { mobile, countryCode, otp_verified: 'false' };
   
-  // Securely update using the internal ROWID
-  const updated = await updateRecordSecure(app, 'Users', existing.ROWID, updates, currentUser);
-  return {
-    statusCode: 200,
-    payload: { status: 'success', message: 'Mobile updated', record: updated }
-  };
+  const segment = app.cache().segment();
+  if(body.otp){
+    if (body.otp == await segment.getValue(zuid)){
+      // Securely update using the internal ROWID
+      const updated = await updateRecordSecure(app, 'Users', existing.ROWID, updates, currentUser);
+      return {
+        statusCode: 200,
+        payload: { status: 'success', message: 'Mobile updated', record: updated }
+      };
+    }else{
+      return {
+        statusCode: 400,
+        payload: { status: 'error', message: 'Invalid OTP' }
+      };
+    }
+  }
+  const result = await handleSendOtp(app, currentUser, body);  
+  if(result.statusCode && result.statusCode == 200) {
+    const updated = await updateRecordSecure(app, 'Users', existing.ROWID, updates, currentUser);
+    return result;  
+  }
+  
 }
 
 async function handleSendOtp(app, currentUser, body) {
@@ -96,10 +111,9 @@ async function handleSendOtp(app, currentUser, body) {
   const segment = app.cache().segment();
   await segment.put(zuid, otpCode, 1);
 
-  if (mobile === process.env.TEST_MOBILE_BYPASS) {
-    return { statusCode: 200, payload: { status: 'success', message: 'Test Mode: OTP bypassed' } };
-  }
-
+  
+  return { statusCode: 200, payload: { status: 'success', message: 'OTP sent ' + otpCode} };
+  
   await axios.post(process.env.DIDIT_BASE_URL, {
     recipient: mobile,
     message: `Your verification code is: ${otpCode}`
@@ -114,12 +128,8 @@ async function handleVerifyOtp(app, currentUser, body) {
   const { otp } = body;
   const zuid = currentUser.zuid;
 
-  if (process.env.TEST_OTP_BYPASS && otp === process.env.TEST_OTP_BYPASS) {
-    return await finalizeVerification(app, currentUser, "Test Bypass");
-  }
-
   const segment = app.cache().segment();
-  const cachedOtp = await segment.get(zuid);
+  const cachedOtp = await segment.getValue(zuid);
 
   if (!cachedOtp || cachedOtp !== otp) throw new Error('Invalid or expired OTP');
 
