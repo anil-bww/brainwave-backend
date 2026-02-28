@@ -32,57 +32,90 @@ async function handleAddProperty(app, currentUser, body) {
   return { statusCode: 201, payload: { status: 'success', record } };
 }
 
-async function handleGenerateElavonSessionToken(app, currentUser, body) {
-  //const { amount } = body;
-  amount = 50.00;
-  if (!amount || isNaN(parseFloat(amount))) {
-    return {
-      statusCode: 400,
-      payload: { status: "error", message: "Invalid amount" }
-    };
-  }
 
-  const elavonUrl = process.env.ELAVON_ENV === "PROD"
-    ? "https://api.convergepay.com/hosted-payments/transaction_token"
-    : "https://api.demo.convergepay.com/hosted-payments/transaction_token";
-
-  const formData = new URLSearchParams({
-    ssl_merchant_id: "0022768", //process.env.ELAVON_MERCHANT_ID,
-    ssl_user_id: "apiuser",//process.env.ELAVON_USER_ID,
-    ssl_pin: "I65WWBCPV45S07VA7D8X9SA0CMT1JK12PPV9E6VPOLFUKL0QZLM3TMGUTYXGVDSL",//process.env.ELAVON_PIN,
-    ssl_transaction_type: "CCSALE",
-    ssl_amount: String(parseFloat(amount).toFixed(2))
-  });
-
+async function handleGenerateElavonSessionToken(amount) {
   try {
+    // 1️⃣ Validate amount
+    if (!amount || isNaN(amount)) {
+      return {
+        statusCode: 400,
+        payload: { status: "error", message: "Invalid amount" }
+      };
+    }
+
+    // 2️⃣ Determine environment URL
+    const elavonUrl =
+      process.env.ELAVON_ENV === "PROD"
+        ? "https://api.convergepay.com/hosted-payments/transaction_token"
+        : "https://api.demo.convergepay.com/hosted-payments/transaction_token";
+
+    // 3️⃣ Build form body
+    const formData = new URLSearchParams({
+      ssl_merchant_id: "0022768",
+      ssl_user_id: "apiuser",
+      ssl_pin: "I65WWBCPV45S07VA7D8X9SA0CMT1JK12PPV9E6VPOLFUKL0QZLM3TMGUTYXGVDSL",
+      ssl_transaction_type: "CCSALE",
+      ssl_amount: parseFloat(amount).toFixed(2)
+    });
+
+    // 4️⃣ Make request
     const response = await axios.post(
       elavonUrl,
       formData.toString(),
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        timeout: 15000
+      }
     );
 
-    const result = Object.fromEntries(new URLSearchParams(response.data));
+    // 5️⃣ Parse response
+    const result = new URLSearchParams(response.data);
+    const token = result.get("ssl_txn_auth_token");
 
-    if (!result.ssl_txn_auth_token) {
-      throw new Error(result.errorMessage || "Token generation failed");
+    if (!token) {
+      console.error("Elavon Token Missing:", response.data);
+      return {
+        statusCode: 500,
+        payload: {
+          status: "error",
+          message: result.get("errorMessage") || "Token generation failed"
+        }
+      };
     }
 
+    // 6️⃣ Success
     return {
       statusCode: 200,
       payload: {
         status: "success",
-        sessionToken: result.ssl_txn_auth_token
+        sessionToken: token
       }
     };
 
-  } catch (err) {
-    console.log("ELAVON ERROR:", err.response?.data);
-    
+  } catch (error) {
+    console.error("======== ELAVON ERROR START ========");
+    console.error("Message:", error.message);
+
+    if (error.response) {
+      console.error("Status Code:", error.response.status);
+      console.error("Headers:", error.response.headers);
+      console.error("Raw Response:", error.response.data);
+    } else if (error.request) {
+      console.error("No response received from Elavon");
+    } else {
+      console.error("Request setup error:", error);
+    }
+
+    console.error("======== ELAVON ERROR END ========");
+
     return {
       statusCode: 500,
       payload: {
         status: "error",
-        message: err.response?.data || err.message
+        message: "Elavon request failed",
+        debug: error.response?.data || error.message
       }
     };
   }
