@@ -60,41 +60,6 @@ app.post('/kyc/createSession', async (req, res) => {
   }
 });
 
-// PUBLIC WEBHOOK ENDPOINT
-app.post('/kyc/webhook', async (req, res) => {
-  try {
-    const signatureHeader = req.headers["x-didit-signature"];
-    const webhookSecret = "vdfVyngtYKAa5EOro0wsJCBf0U0PifOlQ9Gvs9QjGkg"; //process.env.DIDIT_WEBHOOK_SECRET;
-
-    if (!signatureHeader) {
-      return res.status(400).send("Missing signature");
-    }
-
-    // Example: "t=1700000000,v1=abc123"
-    const parts = signatureHeader.split(",");
-    const timestamp = parts[0].split("=")[1];
-    const receivedSignature = parts[1].split("=")[1];
-
-    const payload = timestamp + "." + req.body.toString();
-
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(payload)
-      .digest("hex");
-
-    if (expectedSignature == receivedSignature) {
-      const result = await handleDiditWebhook(req); // Pass raw req to check headers
-      res.status(result.statusCode).json(result.payload);
-    }else {
-      res.status(400).json({ status: 'error', message: "Invalid signature" });
-    }
-    
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-});
-
-
 app.post('/payment/generateToken', async (req, res) => {
   try {
     const { app: catalystApp, currentUser } = await verifyAuth(req, res);
